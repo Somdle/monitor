@@ -6,7 +6,8 @@ import pytest
 from PIL import Image
 
 from monitor35.render import render
-from monitor35.runtime import MonitorWorker, Snapshot, disk_root
+from monitor35.runtime import MonitorWorker, Snapshot
+from monitor35.sensors import Telemetry
 from monitor35.session import DisplaySession, Status
 from monitor35.theme import default_theme
 
@@ -28,7 +29,7 @@ def test_rotation_only_affects_device_output(rotated):
             pass
 
     theme = replace(default_theme(), rotate_180=rotated)
-    worker = MonitorWorker(theme, disk_root())
+    worker = MonitorWorker(theme)
     worker.session = DisplaySession(Display)
     worker.enabled.set()
     worker.start()
@@ -45,8 +46,12 @@ def test_rotation_only_affects_device_output(rotated):
     assert frames[0].tobytes() == expected.tobytes()
 
 
-def test_invalid_sensor_path_reports_error_and_worker_stops(tmp_path):
-    worker = MonitorWorker(default_theme(), str(tmp_path / "missing"))
+def test_sensor_failure_reports_error_and_worker_stops(monkeypatch):
+    def fail():
+        raise OSError("sensor unavailable")
+
+    monkeypatch.setattr("psutil.virtual_memory", fail)
+    worker = MonitorWorker(default_theme())
     worker.start()
     try:
         snapshot = worker.snapshots.get(timeout=3)
@@ -58,11 +63,11 @@ def test_invalid_sensor_path_reports_error_and_worker_stops(tmp_path):
 
 
 def test_latest_value_mailbox_drops_stale_snapshots():
-    worker = MonitorWorker(default_theme(), disk_root())
+    worker = MonitorWorker(default_theme())
     image = Image.new("RGB", (480, 320))
     for value in range(100):
-        worker.publish(Snapshot(image, {"cpu": value}, Status()))
-    assert worker.snapshots.get_nowait().values["cpu"] == 99
+        worker.publish(Snapshot(image, Telemetry(cpu=value), Status()))
+    assert worker.snapshots.get_nowait().values.cpu == 99
     try:
         worker.snapshots.get_nowait()
     except queue.Empty:
@@ -88,7 +93,7 @@ def test_worker_suspends_promptly_without_frames_until_resume():
         def close(self):
             events.append("close")
 
-    worker = MonitorWorker(default_theme(), disk_root())
+    worker = MonitorWorker(default_theme())
     worker.session = DisplaySession(Display)
     worker.enabled.set()
     worker.start()

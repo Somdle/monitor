@@ -1,10 +1,10 @@
 # Dependency Rules
 
-- render → theme
-- runtime → device, render, session, theme
-- app → power, render, runtime, theme
+- render → theme, sensors
+- runtime → device, render, session, theme, sensors
+- app → power, render, runtime, theme, sensors
 - __main__ → app, device, logging_setup, runtime, theme
-- theme, device, power, session, logging_setup은 다른 프로젝트 모듈에 의존하지 않는다.
+- theme, sensors, device, power, session, logging_setup은 다른 프로젝트 모듈에 의존하지 않는다.
 
 tests/test_architecture.py가 허용된 import를 AST로 검사한다. 이 방향은 순환을 허용하지 않는다.
 장치 클래스는 Display protocol의 실행 구현이며 런타임에서 조립한다.

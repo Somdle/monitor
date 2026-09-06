@@ -10,9 +10,10 @@ def test_imports_follow_documented_ownership():
         "power": set(),
         "logging_setup": set(),
         "session": set(),
-        "render": {"theme"},
-        "runtime": {"device", "render", "session", "theme"},
-        "app": {"power", "render", "runtime", "theme"},
+        "sensors": set(),
+        "render": {"theme", "sensors"},
+        "runtime": {"device", "render", "session", "theme", "sensors"},
+        "app": {"power", "render", "runtime", "theme", "sensors"},
         "__main__": {"device", "logging_setup", "runtime", "theme", "app"},
     }
     root = Path(__file__).parents[1] / "src" / "monitor35"

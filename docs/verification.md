@@ -71,3 +71,25 @@ from blocking subsequent worker tests.
 The existing application has unsaved user edits. Window input activation failed,
 so it was not forcibly stopped and its live theme was not overwritten. User should
 save and restart with start.cmd to use the new checkbox.
+
+## Performance dashboard update — 2026-09-06
+
+- Task Manager style four-card renderer replaces the decorative title and clock.
+  CPU/memory use percent charts, disk/network use throughput charts, all spanning 60 seconds.
+- Live sampling found C:, D:, E: formatted local volumes and three physical disk counters.
+  Empty F:/G: media are excluded. Actual memory capacity and Ethernet traffic rendered
+  successfully in `.tmp/dashboard-smoke/preview.png` during a real sensor smoke run.
+- 41 tests cover elapsed-time rates, memory quantities, multiple volumes, hotplug,
+  counter reset, unavailable disk counters, partial volume failure, adapter selection,
+  bounded history, chart/paging pixels, v1 migration/backup, editor undo and output-only rotation.
+- Ruff lint/format, mypy, pytest, package build and diff checks passed.
+- Structure Compliance: PASS. New sensor shapes and rate state have a single owner in
+  sensors; architecture import checks pass; renderer remains upright and serial recovery
+  stays in session/device. No internal mocks or duplicate rate calculation paths were added.
+  v1 is a one-way input migration with an explicit exit condition in decisions.md.
+- Real Tk tests pass with one Tcl interpreter and separate windows. A separate review
+  window launched, but Computer Use returned an incorrect foreground capture and then
+  `failed to activate captured window`; full-window visual verification is unconfirmed.
+  The Pillow output itself was visually inspected. No current LCD transmission/sleep
+  test is claimed for this update. The user's running app and data were not replaced;
+  save, close and restart with start.cmd to load the updated code.

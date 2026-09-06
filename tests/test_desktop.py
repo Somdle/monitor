@@ -19,8 +19,17 @@ def collect_tk_objects_on_main_thread():
     gc.collect()
 
 
-def test_edit_invalid_input_undo_save_and_shutdown(tmp_path):
+@pytest.fixture(scope="module")
+def desktop_root():
+    # Like the application, use one Tcl interpreter with independently closed windows.
     root = tk.Tk()
+    root.withdraw()
+    yield root
+    root.destroy()
+
+
+def test_edit_invalid_input_undo_save_and_shutdown(tmp_path, desktop_root):
+    root = tk.Toplevel(desktop_root)
     root.withdraw()
     original = default_theme()
     app = MonitorApp(root, original, tmp_path / "theme.json")
@@ -47,24 +56,32 @@ def test_edit_invalid_input_undo_save_and_shutdown(tmp_path):
         app.begin_drag(SimpleNamespace(x=60, y=84))
         app.drag(SimpleNamespace(x=80, y=94))
         app.end_drag(None)
-        assert (app.theme.widgets[0].x, app.theme.widgets[0].y) == (70, 84)
+        assert (app.theme.widgets[0].x, app.theme.widgets[0].y) == (70, 16)
         app.undo()
-        assert (app.theme.widgets[0].x, app.theme.widgets[0].y) == (50, 74)
+        assert (app.theme.widgets[0].x, app.theme.widgets[0].y) == (50, 6)
         assert app.save()
         assert load_theme(tmp_path / "theme.json").rotate_180
         app.rotation_button.invoke()
         assert not app.theme.rotate_180
         app.reload()
         assert app.rotation.get()
+        app.network.set("Ethernet")
+        app.apply_network()
+        assert app.theme.network_interface == "Ethernet"
+        app.undo()
+        assert app.theme.network_interface == ""
+        app.selection.current(2)
+        app.select()
+        assert str(app.size_input.cget("state")) == "disabled"
     finally:
-        root.after(8000, root.quit)
         app.close()
-        root.mainloop()
+        if root.winfo_exists():
+            root.wait_window()
     assert not app.worker.is_alive()
 
 
-def test_native_resume_broadcast_reaches_callback():
-    root = tk.Tk()
+def test_native_resume_broadcast_reaches_callback(desktop_root):
+    root = tk.Toplevel(desktop_root)
     root.withdraw()
     root.update_idletasks()
     received = threading.Event()

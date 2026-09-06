@@ -12,11 +12,12 @@ from PIL import ImageTk
 
 from monitor35.power import PowerListener
 from monitor35.render import render
-from monitor35.runtime import MonitorWorker, disk_root
-from monitor35.theme import HEIGHT, WIDTH, Theme, load_theme, save_theme
+from monitor35.runtime import MonitorWorker
+from monitor35.sensors import Telemetry
+from monitor35.theme import CARD_HEIGHT, CARD_WIDTH, HEIGHT, WIDTH, Theme, load_theme, save_theme
 
 logger = logging.getLogger(__name__)
-NAMES = {"cpu": "CPU 사용률", "memory": "메모리 사용률", "disk": "디스크 사용량", "clock": "시계"}
+NAMES = {"cpu": "CPU", "memory": "메모리", "disk": "디스크", "network": "네트워크"}
 
 
 class MonitorApp:
@@ -25,15 +26,15 @@ class MonitorApp:
         self.saved_theme = theme
         self.history: list[Theme] = []
         self.selected = 0
-        self.values: dict[str, float | str] = {}
+        self.values = Telemetry()
         self.drag_origin: tuple[int, int] | None = None
         self.drag_theme = theme
         self.closing = False
         self.last_state = "미리보기"
-        self.worker = MonitorWorker(theme, disk_root())
+        self.worker = MonitorWorker(theme)
         root.title("Monitor35 · 화면 편집")
-        root.geometry("980x740")
-        root.minsize(900, 740)
+        root.geometry("980x820")
+        root.minsize(900, 800)
         root.configure(bg="#eef2f6")
         style = ttk.Style()
         style.theme_use("clam")
@@ -72,31 +73,57 @@ class MonitorApp:
         ttk.Label(
             preview,
             text="연결 후 편집 내용이 실제 화면에도 반영됩니다.\n"
-            "온도·GPU 센서는 아직 지원하지 않습니다.",
+            "차트: 최근 60초 · 디스크 용량: 2개씩 6초 순환\n"
+            "네트워크 누적: 앱/어댑터 시작 이후 측정분 (절전 제외)",
         ).pack(anchor="w", pady=12)
+        volume_table = ttk.Frame(preview)
+        volume_table.pack(fill="x")
+        self.volumes = ttk.Treeview(
+            volume_table, columns=("drive", "used", "total"), show="headings", height=4
+        )
+        for key, label, width in (
+            ("drive", "볼륨", 100),
+            ("used", "사용 (GiB)", 170),
+            ("total", "전체 (GiB)", 170),
+        ):
+            self.volumes.heading(key, text=label)
+            self.volumes.column(key, width=width, stretch=True)
+        volume_scroll = ttk.Scrollbar(volume_table, orient="vertical", command=self.volumes.yview)
+        self.volumes.configure(yscrollcommand=volume_scroll.set)
+        volume_scroll.pack(side="right", fill="y")
+        self.volumes.pack(side="left", fill="both", expand=True)
         panel = ttk.Frame(content, padding=(24, 0, 0, 0))
         panel.pack(side="left", fill="both", expand=True)
         ttk.Label(panel, text="선택 항목").pack(anchor="w")
-        self.selection = ttk.Combobox(panel, values=list(NAMES.values()), state="readonly")
+        self.selection = ttk.Combobox(
+            panel, values=[NAMES[w.metric] for w in theme.widgets], state="readonly"
+        )
         self.selection.pack(fill="x", pady=(5, 12))
         self.selection.current(0)
         self.selection.bind("<<ComboboxSelected>>", self.select)
         self.fields: dict[str, tk.StringVar] = {}
         for key, label, maximum in (
-            ("x", "가로 위치", WIDTH - 150),
-            ("y", "세로 위치", HEIGHT - 92),
-            ("size", "글자 크기", 42),
+            ("x", "가로 위치", WIDTH - CARD_WIDTH),
+            ("y", "세로 위치", HEIGHT - CARD_HEIGHT),
+            ("size", "사용률 글자 크기", 28),
         ):
             row = ttk.Frame(panel)
             row.pack(fill="x", pady=4)
             ttk.Label(row, text=label).pack(side="left")
             value = tk.StringVar()
             self.fields[key] = value
-            ttk.Spinbox(
+            spinbox = ttk.Spinbox(
                 row, from_=16 if key == "size" else 0, to=maximum, textvariable=value, width=9
-            ).pack(side="right")
+            )
+            spinbox.pack(side="right")
+            if key == "size":
+                self.size_input = spinbox
         ttk.Button(panel, text="위치 · 크기 적용", command=self.apply_fields).pack(fill="x", pady=8)
-        ttk.Button(panel, text="글자 색상 선택", command=self.choose_color).pack(fill="x")
+        ttk.Button(panel, text="차트 색상 선택", command=self.choose_color).pack(fill="x")
+        ttk.Label(panel, text="네트워크 어댑터").pack(anchor="w", pady=(12, 4))
+        self.network = ttk.Combobox(panel, state="readonly")
+        self.network.pack(fill="x")
+        self.network.bind("<<ComboboxSelected>>", self.apply_network)
         row = ttk.Frame(panel)
         row.pack(fill="x", pady=(16, 5))
         ttk.Label(row, text="화면 밝기 (0~50)").pack(side="left")
@@ -150,13 +177,20 @@ class MonitorApp:
         self.brightness.set(str(self.theme.brightness))
         self.reset.set(self.theme.reset_on_connect)
         self.rotation.set(self.theme.rotate_180)
+        self.size_input.configure(
+            state="normal" if widget.metric in ("cpu", "memory") else "disabled"
+        )
+        self.selection.configure(values=[NAMES[w.metric] for w in self.theme.widgets])
+        interfaces = tuple(dict.fromkeys((self.theme.network_interface,) + self.values.interfaces))
+        self.network.configure(values=["자동 선택"] + [name for name in interfaces if name])
+        self.network.set(self.theme.network_interface or "자동 선택")
 
     def draw(self):
         self.photo = ImageTk.PhotoImage(render(self.theme, self.values))
         self.canvas.itemconfigure(self.image_id, image=self.photo)
         widget = self.theme.widgets[self.selected]
-        x0, y0 = widget.x - 3, widget.y - 3
-        x1, y1 = min(WIDTH - 1, widget.x + 164), widget.y + 85
+        x0, y0 = widget.x, widget.y
+        x1, y1 = widget.x + CARD_WIDTH - 1, widget.y + CARD_HEIGHT - 1
         self.canvas.coords(self.outline, x0, y0, x1, y1)
 
     def changed(self, theme: Theme, remember: bool = True):
@@ -181,7 +215,7 @@ class MonitorApp:
         x, y = event.x, event.y
         for index in reversed(range(len(self.theme.widgets))):
             widget = self.theme.widgets[index]
-            if widget.x <= x <= widget.x + 164 and widget.y <= y <= widget.y + 85:
+            if widget.x <= x < widget.x + CARD_WIDTH and widget.y <= y < widget.y + CARD_HEIGHT:
                 self.selected = index
                 self.selection.current(index)
                 self.drag_origin = (x - widget.x, y - widget.y)
@@ -197,8 +231,8 @@ class MonitorApp:
         x, y = event.x, event.y
         widgets[self.selected] = replace(
             widgets[self.selected],
-            x=max(0, min(WIDTH - 150, x - self.drag_origin[0])),
-            y=max(0, min(HEIGHT - 92, y - self.drag_origin[1])),
+            x=max(0, min(WIDTH - CARD_WIDTH, x - self.drag_origin[0])),
+            y=max(0, min(HEIGHT - CARD_HEIGHT, y - self.drag_origin[1])),
         )
         self.changed(replace(self.theme, widgets=tuple(widgets)), remember=False)
 
@@ -242,13 +276,17 @@ class MonitorApp:
     def apply_rotation(self):
         self.changed(replace(self.theme, rotate_180=self.rotation.get()))
 
+    def apply_network(self, _event=None):
+        name = self.network.get()
+        self.changed(replace(self.theme, network_interface="" if name == "자동 선택" else name))
+
     def save(self) -> bool:
         try:
             save_theme(self.theme_path, self.theme)
             self.saved_theme = self.theme
             self.notice.set(f"저장 완료 · {self.theme_path.name}")
             return True
-        except OSError as exc:
+        except (OSError, ValueError) as exc:
             logger.exception("theme_save_failed")
             self.notice.set(f"저장 실패 · 경로와 권한을 확인해 주세요: {exc}")
             return False
@@ -292,7 +330,26 @@ class MonitorApp:
         except queue.Empty:
             snapshot = None
         if snapshot:
+            interfaces_changed = self.values.interfaces != snapshot.values.interfaces
             self.values = snapshot.values
+            if interfaces_changed:
+                interfaces = tuple(
+                    dict.fromkeys((self.theme.network_interface,) + self.values.interfaces)
+                )
+                self.network.configure(values=["자동 선택"] + [name for name in interfaces if name])
+            previous_view = self.volumes.yview()
+            self.volumes.delete(*self.volumes.get_children())
+            for volume in self.values.volumes:
+                self.volumes.insert(
+                    "",
+                    "end",
+                    values=(
+                        volume.name,
+                        f"{volume.used / 1024**3:.1f}" if volume.used is not None else "읽기 실패",
+                        f"{volume.total / 1024**3:.1f}" if volume.total is not None else "--",
+                    ),
+                )
+            self.volumes.yview_moveto(previous_view[0])
             status = snapshot.status
             if status.state != self.last_state:
                 if status.state == "전송 중":
@@ -313,7 +370,8 @@ class MonitorApp:
             )
             self.status.set(
                 f"{status.state} · 전송 {status.frames} · 연결 {status.connections} · "
-                f"실패 {status.failures} · 최근 전송 {sent}\n{status.detail}"
+                f"실패 {status.failures} · 최근 전송 {sent}\n{status.detail} "
+                + " ".join(self.values.warnings)
             )
             if status.state == "오류":
                 self.connect_button.configure(state="disabled")

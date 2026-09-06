@@ -24,4 +24,4 @@ PowerShell, 프로젝트 루트 기준:
 소유권과 import 방향은 architecture 문서 및 tests/test_architecture.py에 기록한다.
 UI에서 USB I/O를 실행하지 않는다. 재연결 정책은 DisplaySession만 소유한다.
 임시 산출물은 .tmp/, 사용자 데이터는 data/, 의존성은 .venv/에 둔다.
-아직 Git 저장소가 아니므로 fetch/upstream/branch 검사는 해당 없음이다. Git 초기화나 원격 연결을 자동 수행하지 않는다.
+Git 상태와 upstream을 확인하고 작업한다. branch 변경이나 원격 쓰기를 자동 수행하지 않는다.

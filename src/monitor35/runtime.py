@@ -5,14 +5,12 @@ import queue
 import threading
 import time
 from dataclasses import dataclass
-from datetime import datetime
-from pathlib import Path
 
-import psutil
 from PIL import Image
 
 from monitor35.device import TuringDisplay
 from monitor35.render import render
+from monitor35.sensors import Sampler, Telemetry
 from monitor35.session import DisplaySession, Status
 from monitor35.theme import HEIGHT, WIDTH, Theme
 
@@ -22,16 +20,15 @@ logger = logging.getLogger(__name__)
 @dataclass(frozen=True)
 class Snapshot:
     image: Image.Image
-    values: dict[str, float | str]
+    values: Telemetry
     status: Status
 
 
 class MonitorWorker(threading.Thread):
-    def __init__(self, theme: Theme, disk_root: str):
+    def __init__(self, theme: Theme):
         super().__init__(name="display-worker", daemon=True)
         self.lock = threading.Lock()
         self.theme = theme
-        self.disk_root = disk_root
         self.enabled = threading.Event()
         self.stop_requested = threading.Event()
         self.reconnect_requested = threading.Event()
@@ -84,10 +81,10 @@ class MonitorWorker(threading.Thread):
         self.snapshots.put_nowait(snapshot)
 
     def run(self) -> None:
-        values: dict[str, float | str] = {}
+        values = Telemetry()
         frame = Image.new("RGB", (WIDTH, HEIGHT))
         try:
-            psutil.cpu_percent()
+            sampler = Sampler()
             while not self.stop_requested.is_set():
                 started = time.monotonic()
                 if self.suspend_requested.is_set():
@@ -113,12 +110,7 @@ class MonitorWorker(threading.Thread):
                     continue
                 with self.lock:
                     theme = self.theme
-                values = {
-                    "cpu": psutil.cpu_percent(),
-                    "memory": psutil.virtual_memory().percent,
-                    "disk": psutil.disk_usage(self.disk_root).percent,
-                    "clock": datetime.now().strftime("%H:%M"),
-                }
+                values = sampler.sample(theme.network_interface)
                 frame = render(theme, values)
                 if self.reconnect_requested.is_set():
                     self.reconnect_requested.clear()
@@ -145,7 +137,3 @@ class MonitorWorker(threading.Thread):
             )
         finally:
             self.session.disconnect()
-
-
-def disk_root() -> str:
-    return Path.cwd().anchor

@@ -10,7 +10,7 @@ from pathlib import Path
 
 from monitor35.device import devices
 from monitor35.logging_setup import configure
-from monitor35.runtime import MonitorWorker, disk_root
+from monitor35.runtime import MonitorWorker
 from monitor35.theme import default_theme, load_theme
 
 
@@ -35,7 +35,7 @@ def main() -> int:
     try:
         theme = load_theme(theme_path) if theme_path.exists() else default_theme()
         if args.smoke is not None:
-            worker = MonitorWorker(theme, disk_root())
+            worker = MonitorWorker(theme)
             if args.connect:
                 worker.enabled.set()
             worker.start()
