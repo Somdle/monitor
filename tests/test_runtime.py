@@ -1,11 +1,48 @@
 import queue
 import time
+from dataclasses import replace
 
+import pytest
 from PIL import Image
 
+from monitor35.render import render
 from monitor35.runtime import MonitorWorker, Snapshot, disk_root
 from monitor35.session import DisplaySession, Status
 from monitor35.theme import default_theme
+
+
+@pytest.mark.parametrize("rotated", [False, True])
+def test_rotation_only_affects_device_output(rotated):
+    frames = []
+
+    class Display:
+        port = "COM4"
+
+        def paint(self, image, pos=(0, 0)):
+            frames.append(image.copy())
+
+        def brightness(self, value):
+            pass
+
+        def close(self):
+            pass
+
+    theme = replace(default_theme(), rotate_180=rotated)
+    worker = MonitorWorker(theme, disk_root())
+    worker.session = DisplaySession(Display)
+    worker.enabled.set()
+    worker.start()
+    try:
+        snapshot = worker.snapshots.get(timeout=3)
+    finally:
+        worker.request_stop()
+        worker.join(timeout=3)
+    assert not worker.is_alive()
+    assert snapshot.status.state == "전송 중"
+    upright = render(default_theme(), snapshot.values)
+    assert snapshot.image.tobytes() == upright.tobytes()
+    expected = upright.transpose(Image.Transpose.ROTATE_180) if rotated else upright
+    assert frames[0].tobytes() == expected.tobytes()
 
 
 def test_invalid_sensor_path_reports_error_and_worker_stops(tmp_path):

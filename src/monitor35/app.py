@@ -105,7 +105,7 @@ class MonitorApp:
         ttk.Button(panel, text="밝기 적용", command=self.apply_brightness).pack(fill="x")
         self.rotation = tk.BooleanVar(value=theme.rotate_180)
         self.rotation_button = ttk.Checkbutton(
-            panel, text="화면 180° 회전", variable=self.rotation, command=self.apply_rotation
+            panel, text="실제 화면 180° 회전", variable=self.rotation, command=self.apply_rotation
         )
         self.rotation_button.pack(anchor="w", pady=(10, 0))
         self.reset = tk.BooleanVar(value=theme.reset_on_connect)
@@ -157,8 +157,6 @@ class MonitorApp:
         widget = self.theme.widgets[self.selected]
         x0, y0 = widget.x - 3, widget.y - 3
         x1, y1 = min(WIDTH - 1, widget.x + 164), widget.y + 85
-        if self.theme.rotate_180:
-            x0, y0, x1, y1 = WIDTH - 1 - x1, HEIGHT - 1 - y1, WIDTH - 1 - x0, HEIGHT - 1 - y0
         self.canvas.coords(self.outline, x0, y0, x1, y1)
 
     def changed(self, theme: Theme, remember: bool = True):
@@ -180,7 +178,7 @@ class MonitorApp:
 
     def begin_drag(self, event):
         self.canvas.focus_set()
-        x, y = self.layout_point(event.x, event.y)
+        x, y = event.x, event.y
         for index in reversed(range(len(self.theme.widgets))):
             widget = self.theme.widgets[index]
             if widget.x <= x <= widget.x + 164 and widget.y <= y <= widget.y + 85:
@@ -196,7 +194,7 @@ class MonitorApp:
         if self.drag_origin is None:
             return
         widgets = list(self.theme.widgets)
-        x, y = self.layout_point(event.x, event.y)
+        x, y = event.x, event.y
         widgets[self.selected] = replace(
             widgets[self.selected],
             x=max(0, min(WIDTH - 150, x - self.drag_origin[0])),
@@ -243,11 +241,6 @@ class MonitorApp:
 
     def apply_rotation(self):
         self.changed(replace(self.theme, rotate_180=self.rotation.get()))
-
-    def layout_point(self, x: int, y: int) -> tuple[int, int]:
-        if self.theme.rotate_180:
-            return WIDTH - 1 - x, HEIGHT - 1 - y
-        return x, y
 
     def save(self) -> bool:
         try:

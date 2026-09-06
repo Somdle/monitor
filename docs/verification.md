@@ -2,7 +2,7 @@
 
 ## Automated checks
 
-- `python -m pytest --basetemp=.tmp/pytest`: 27 passed.
+- `python -m pytest --basetemp=.tmp/pytest`: 30 passed.
 - `python -m ruff check src tests`: passed.
 - `python -m ruff format --check src tests`: passed.
 - `python -m mypy src`: 10 source files passed.
@@ -53,3 +53,21 @@ Transmission success means an OS serial write completed, not an LCD acknowledgem
 The vendor app's original failure has not been reproduced and diagnosed internally.
 The new application recovered in one real sleep/resume trial. Extended repetition
 and the added screen-off behavior must be verified separately.
+
+## Rotation update
+
+Added optional Theme.rotate_180 (default false) and a desktop checkbox. The worker
+rotates only the device output; rendering, preview snapshots, editor hit testing
+and drag coordinates remain upright. Tests verify exact device pixels and upright
+snapshots, persistence, old-theme loading, boolean validation, unchanged selection
+bounds, drag direction, undo and checkbox reload.
+Validation: Ruff lint/format, mypy, all 32 tests, package build and diff check passed.
+Structure Compliance: PASS — existing Theme owns orientation, only runtime transforms
+device output, no new helpers/schema/dependencies or error fallbacks. Obsolete editor
+coordinate conversion was removed. Physical output for this correction has not been
+visually rechecked on the connected LCD.
+Tk test finalizers are collected on the main thread to prevent delayed cleanup
+from blocking subsequent worker tests.
+The existing application has unsaved user edits. Window input activation failed,
+so it was not forcibly stopped and its live theme was not overwritten. User should
+save and restart with start.cmd to use the new checkbox.

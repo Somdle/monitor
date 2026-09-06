@@ -52,16 +52,11 @@ def test_preview_renders_changes_and_stays_inside_display():
     assert original.tobytes() != changed.tobytes()
 
 
-def test_rotation_rotates_entire_frame_and_persists(tmp_path):
-    from PIL import Image
-
+def test_preview_stays_upright_and_rotation_persists(tmp_path):
     theme = default_theme()
     values = {"cpu": 42.0, "clock": "12:34"}
     rotated = replace(theme, rotate_180=True)
-    assert (
-        render(rotated, values).tobytes()
-        == render(theme, values).transpose(Image.Transpose.ROTATE_180).tobytes()
-    )
+    assert render(rotated, values).tobytes() == render(theme, values).tobytes()
     path = tmp_path / "theme.json"
     save_theme(path, rotated)
     assert load_theme(path) == rotated

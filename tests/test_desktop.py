@@ -39,13 +39,15 @@ def test_edit_invalid_input_undo_save_and_shutdown(tmp_path):
         assert app.theme == original
         app.reload()
         assert app.theme.widgets[0].x == 50
+        outline = app.canvas.coords(app.outline)
         app.rotation_button.invoke()
         assert app.theme.rotate_180
-        # Rotated CPU at logical (60,84): drag 20 right / 10 down in preview.
-        app.begin_drag(SimpleNamespace(x=479 - 60, y=319 - 84))
-        app.drag(SimpleNamespace(x=479 - 60 + 20, y=319 - 84 + 10))
+        assert app.canvas.coords(app.outline) == outline
+        # Physical rotation leaves editor hit testing and drag direction upright.
+        app.begin_drag(SimpleNamespace(x=60, y=84))
+        app.drag(SimpleNamespace(x=80, y=94))
         app.end_drag(None)
-        assert (app.theme.widgets[0].x, app.theme.widgets[0].y) == (30, 64)
+        assert (app.theme.widgets[0].x, app.theme.widgets[0].y) == (70, 84)
         app.undo()
         assert (app.theme.widgets[0].x, app.theme.widgets[0].y) == (50, 74)
         assert app.save()

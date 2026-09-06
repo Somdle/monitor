@@ -32,4 +32,4 @@ def render(theme: Theme, values: dict[str, float | str]) -> Image.Image:
             length = round(150 * max(0, min(100, value)) / 100)
             if length:
                 draw.rounded_rectangle((x, y + 73, x + length, y + 78), radius=2, fill=widget.color)
-    return image.transpose(Image.Transpose.ROTATE_180) if theme.rotate_180 else image
+    return image

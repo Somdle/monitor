@@ -124,7 +124,10 @@ class MonitorWorker(threading.Thread):
                     self.reconnect_requested.clear()
                     self.session.reconnect()
                 if self.enabled.is_set():
-                    status = self.session.tick(frame, theme.brightness, time.time())
+                    output = (
+                        frame.transpose(Image.Transpose.ROTATE_180) if theme.rotate_180 else frame
+                    )
+                    status = self.session.tick(output, theme.brightness, time.time())
                 else:
                     self.session.disconnect()
                     status = Status()
