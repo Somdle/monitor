@@ -1,0 +1,2 @@
+include AGENTS.md README.md THIRD_PARTY_NOTICES.md start.cmd setup.cmd
+recursive-include docs *.md

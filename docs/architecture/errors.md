@@ -1,0 +1,25 @@
+# Errors and Recovery
+
+OSError/SerialException은 DisplaySession 경계에서 포트를 닫고 마지막 성공 프레임을 폐기한다.
+재시도는 1,2,4,8,15초(최대) 간격이며 매 연결마다 serial ID로 포트를 재탐색한다.
+Windows 복귀 이벤트 또는 5초 초과 tick 공백은 세션 재연결을 요청한다.
+연결 후 방향·밝기·화면 켜기를 적용하고 전체 프레임을 전송한다. 평소에는 차분 영역을,
+30초마다 전체 화면을 재전송한다. 전송 성공은 OS write 완료 의미이며 LCD 표시 ACK는 아니다.
+
+기본 초기화는 RESET 전송 → 포트 닫기 → 취소 가능한 3초 대기 → 재탐색이다.
+초기화가 맞지 않는 별도 보드 모델은 UI의 재연결 시 장치 초기화를 해제한다.
+직렬 읽기 0.3초, 개별 write 1초, 프레임 전송 deadline 4초이며 진행 중 write로 최대 1초 더 소요될 수 있다.
+중단된 전송의 펌웨어 버퍼가 reset에도 반응하지 않는 하드웨어 장애는 USB 재삽입이 필요할 수 있다.
+
+센서/렌더링의 예상하지 못한 오류는 worker를 중지하고 오류 Snapshot 및 JSON traceback을 남긴다.
+테마 읽기/쓰기 실패는 UI 메시지로 알리며 기존 파일을 기본값으로 덮어쓰지 않는다.
+큐가 비어 있는 경우는 오류가 아닌 latest-value mailbox의 정상 제어 흐름이다.
+로그는 1MB × 현재 + 백업 3개, 센서 값과 화면 픽셀은 로그에 넣지 않는다.
+
+절전 진입(PBT_APMSUSPEND) 시 window callback은 worker를 깨우고 최대 1.5초 완료를 기다린다.
+USB I/O는 계속 worker만 소유하며 현재 프레임 완료 뒤 SCREEN_OFF → close 순으로 처리한다.
+절전 중에는 재연결/센서 갱신을 중지하고 복귀 알림에서만 다시 시작한다.
+실패/시간 초과는 screen_off_failed 또는 suspend_deadline_exceeded로 기록한다.
+Windows는 약 2초 후 작업을 중단할 수 있으므로 이미 USB가 응답하지 않는 상황의 화면 꺼짐은 보장하지 않는다.
+자동 복귀(0x12) 후 오는 중복 사용자 복귀(0x7)는 추가 reset을 일으키지 않는다.
+근거: https://learn.microsoft.com/en-us/windows/win32/power/pbt-apmsuspend
