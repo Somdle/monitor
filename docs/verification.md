@@ -93,3 +93,17 @@ save and restart with start.cmd to use the new checkbox.
   The Pillow output itself was visually inspected. No current LCD transmission/sleep
   test is claimed for this update. The user's running app and data were not replaced;
   save, close and restart with start.cmd to load the updated code.
+
+## Large numeric readouts — 2026-09-06
+
+Removed disk capacity sampling, the Volume shape, editor table and LCD pagination.
+All physical disk R/W counters remain aggregated. Primary memory, R/W, network rate
+and cumulative numbers use Widget.size (24px by default), matching CPU percentage.
+Units and chart scales remain secondary. Saved v2 themes need no migration.
+Live sensor smoke rendered `.tmp/large-numbers/preview.png`; the output was visually
+inspected at native 480×320 size. Tests cover multi-disk R/W summation, persistent
+non-paging output, editable R/W/network numeric size and existing recovery behavior.
+Structure Compliance: PASS — removed unused shapes/UI/I/O, retained documented import
+boundaries and one rate calculation owner. No additional dependency or fallback path.
+LCD readability on the physical 3.5-inch panel still requires user confirmation.
+Validation: all 42 tests, Ruff lint/format, mypy, package build and diff checks passed.

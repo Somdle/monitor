@@ -5,7 +5,7 @@
 - 연결 상태/카운터: session.py의 Status.
 - 장치 I/O 계약: session.py의 Display.
 - 센서/프레임 전달: runtime.py의 Snapshot.
-- 센서 값/시간 이력: sensors.py의 Telemetry, Point, Volume. Sampler만 변경 가능한 기준값을 소유한다.
+- 센서 값/시간 이력: sensors.py의 Telemetry, Point. Sampler만 변경 가능한 기준값을 소유한다.
 - 카드 크기와 저장 필드: theme.py의 CARD_WIDTH/CARD_HEIGHT와 Theme(version 2).
 - 지원 장치 식별: device.py의 SUPPORTED_IDS.
 

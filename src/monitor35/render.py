@@ -30,7 +30,7 @@ def quantity(value: float | None, rate: bool = False) -> str:
     while value >= 1024 and index < len(units) - 1:
         value /= 1024
         index += 1
-    number = f"{value:.1f}" if index else f"{value:.0f}"
+    number = f"{value:.1f}" if index and value < 100 else f"{value:.0f}"
     return f"{number} {units[index]}" + ("/s" if rate else "")
 
 
@@ -95,7 +95,7 @@ def chart(
 def render(theme: Theme, data: Telemetry) -> Image.Image:
     image = Image.new("RGB", (WIDTH, HEIGHT), BACKGROUND)
     for widget in theme.widgets:
-        # Rendering into a card clips custom font sizes and long adapter/volume names.
+        # Rendering into a card clips custom font sizes and long adapter names.
         card = Image.new("RGB", (CARD_WIDTH, CARD_HEIGHT), CARD)
         draw = ImageDraw.Draw(card)
         color = widget.color
@@ -113,46 +113,40 @@ def render(theme: Theme, data: Telemetry) -> Image.Image:
             )
             chart(draw, data, (metric,), (10, 33, 219, 106), color, percent=True)
             if metric == "memory":
-                detail = (
-                    f"{data.memory_used / 1024**3:.1f} / "
-                    f"{data.memory_total / 1024**3:.1f} GiB in use"
-                )
-            else:
-                detail = "Utilization · all logical processors"
-            fit_text(draw, (10, 128), detail if value is not None else "Waiting for sensors…", 210)
-        elif metric == "disk":
-            pages = max(1, math.ceil(len(data.volumes) / 2))
-            page = int(data.at // 6) % pages
-            draw.text(
-                (219, 7), f"All disks · {page + 1}/{pages}", anchor="ra", font=font(10), fill=MUTED
-            )
-            fit_text(draw, (10, 26), "R " + quantity(data.read, True), 103, fill=color)
-            fit_text(draw, (118, 26), "W " + quantity(data.write, True), 103, fill=SECONDARY)
-            chart(draw, data, ("read", "write"), (10, 44, 219, 83), color)
-            visible = data.volumes[page * 2 : page * 2 + 2]
-            if not visible:
-                draw.text((10, 111), "No mounted local volumes", font=font(11), fill=MUTED)
-            for index, volume in enumerate(visible):
-                y = 103 + index * 23
-                detail = "unavailable"
-                fraction = 0.0
-                if volume.total and volume.used is not None:
-                    fraction = min(1, volume.used / volume.total)
-                    detail = (
-                        f"{volume.used / 1024**3:.0f}/{volume.total / 1024**3:.0f} GiB"
-                        f"  {fraction:.0%}"
+                divisor = 1024**3 if data.memory_total < 1024**4 else 1024**4
+                unit = "GiB" if divisor == 1024**3 else "TiB"
+                precision = 1 if data.memory_total / divisor < 100 else 0
+                amount = (
+                    (
+                        f"{data.memory_used / divisor:.{precision}f}/"
+                        f"{data.memory_total / divisor:.{precision}f}"
                     )
-                fit_text(draw, (10, y), f"{volume.name}  {detail}", 209, fill=TEXT)
-                draw.rectangle((10, y + 17, 219, y + 19), fill=GRID)
-                if fraction:
-                    draw.rectangle((10, y + 17, 10 + round(209 * fraction), y + 19), fill=color)
+                    if value is not None
+                    else "--"
+                )
+                draw.text((10, 122), amount, font=font(widget.size), fill=TEXT, anchor="lt")
+                draw.text((219, 136), unit, anchor="ra", font=font(11), fill=MUTED)
         else:
-            fit_text(draw, (90, 7), data.interface or "Disconnected", 129, size=10)
-            fit_text(draw, (10, 26), "↓ " + quantity(data.receive, True), 103, fill=color)
-            fit_text(draw, (118, 26), "↑ " + quantity(data.send, True), 103, fill=SECONDARY)
-            chart(draw, data, ("receive", "send"), (10, 44, 219, 92), color)
-            draw.text((10, 109), "Measured since app / adapter start", font=font(10), fill=MUTED)
-            fit_text(draw, (10, 128), "↓ " + quantity(data.received_total), 103, fill=color)
-            fit_text(draw, (118, 128), "↑ " + quantity(data.sent_total), 103, fill=SECONDARY)
+            disk = metric == "disk"
+            if disk:
+                draw.text((219, 7), "All disks", anchor="ra", font=font(11), fill=MUTED)
+            else:
+                fit_text(draw, (90, 7), data.interface or "Disconnected", 129, size=10)
+            keys = ("read", "write") if disk else ("receive", "send")
+            labels = ("R · Read", "W · Write") if disk else ("↓ Receive", "↑ Send")
+            for x, key, label, ink in zip((10, 118), keys, labels, (color, SECONDARY), strict=True):
+                draw.text((x, 24), label, font=font(11), fill=ink, anchor="lt")
+                number, _, unit = quantity(getattr(data, key), rate=True).partition(" ")
+                draw.text((x, 39), number, font=font(widget.size), fill=ink, anchor="lt")
+                draw.text((x, 67), unit, font=font(11), fill=MUTED, anchor="lt")
+            chart(draw, data, keys, (10, 84, 219, 132 if disk else 99), color)
+            if not disk:
+                for x, value, ink in (
+                    (10, data.received_total, color),
+                    (118, data.sent_total, SECONDARY),
+                ):
+                    number, _, unit = quantity(value).partition(" ")
+                    draw.text((x, 114), number, font=font(widget.size), fill=ink, anchor="lt")
+                    draw.text((x, 139), unit + " total", font=font(10), fill=MUTED, anchor="lt")
         image.paste(card, (widget.x, widget.y))
     return image

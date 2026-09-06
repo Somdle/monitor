@@ -72,7 +72,9 @@ def test_edit_invalid_input_undo_save_and_shutdown(tmp_path, desktop_root):
         assert app.theme.network_interface == ""
         app.selection.current(2)
         app.select()
-        assert str(app.size_input.cget("state")) == "disabled"
+        app.fields["size"].set("28")
+        app.apply_fields()
+        assert app.theme.widgets[2].size == 28
     finally:
         app.close()
         if root.winfo_exists():

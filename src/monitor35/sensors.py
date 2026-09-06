@@ -12,13 +12,6 @@ HISTORY_SECONDS = 60
 
 
 @dataclass(frozen=True)
-class Volume:
-    name: str
-    used: int | None
-    total: int | None
-
-
-@dataclass(frozen=True)
 class Point:
     at: float
     cpu: float
@@ -36,7 +29,6 @@ class Telemetry:
     memory_percent: float | None = None
     memory_used: int = 0
     memory_total: int = 0
-    volumes: tuple[Volume, ...] = ()
     read: float | None = None
     write: float | None = None
     receive: float | None = None
@@ -67,22 +59,6 @@ class Sampler:
         cpu = psutil.cpu_percent()
         memory = psutil.virtual_memory()
         warnings = []
-        volumes = []
-        seen = set()
-        for part in psutil.disk_partitions():
-            if not part.fstype or "cdrom" in part.opts or "remote" in part.opts:
-                continue
-            if part.mountpoint in seen:
-                continue
-            seen.add(part.mountpoint)
-            try:
-                usage = psutil.disk_usage(part.mountpoint)
-                volumes.append(
-                    Volume(part.mountpoint.rstrip("\\/") or "/", usage.used, usage.total)
-                )
-            except OSError:
-                volumes.append(Volume(part.mountpoint.rstrip("\\/") or "/", None, None))
-                warnings.append(f"{part.mountpoint} 용량을 읽을 수 없습니다.")
         try:
             disks = psutil.disk_io_counters(perdisk=True, nowrap=False) or {}
         except OSError:
@@ -158,7 +134,6 @@ class Sampler:
             memory_percent=memory.percent,
             memory_used=memory.total - memory.available,
             memory_total=memory.total,
-            volumes=tuple(sorted(volumes, key=lambda volume: volume.name)),
             read=read,
             write=write,
             receive=receive,
