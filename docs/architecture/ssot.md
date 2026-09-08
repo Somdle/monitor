@@ -25,3 +25,5 @@ rotate_180은 기본값 false이며 버전 1 테마 이전 시에도 방향을 �
 - 앱 아이콘 디자인: icon.app_icon. 트레이와 Tk iconphoto에서 재사용한다.
 
 - 실행 소유권: instance.SingleInstance의 named mutex. 데이터 폴더나 창 제목에 의존하지 않는다. 두 번째 실행은 named event로 기존 창 열기만 요청한다.
+
+- 최근 1분 I/O 사용량: Point.interval_seconds와 Telemetry.minute_bytes. 기존 history에서 유효 구간만 적분하며 렌더는 MB 표시만 담당한다.

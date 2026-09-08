@@ -50,6 +50,10 @@ def test_memory_capacity_and_elapsed_rates(system):
     assert (next_sample.read, next_sample.write) == (3072, 2048)
     assert (next_sample.receive, next_sample.send) == (3000, 500)
     assert (next_sample.received_total, next_sample.sent_total) == (6000, 1000)
+    assert next_sample.minute_bytes("read") == 6144
+    assert next_sample.minute_bytes("write") == 4096
+    assert next_sample.minute_bytes("receive") == 6000
+    assert next_sample.minute_bytes("send") == 1000
     assert len(first.history) == 1  # Previously published snapshots stay immutable.
 
 
@@ -62,6 +66,7 @@ def test_resume_and_counter_reset_do_not_invent_spikes(system):
     assert resumed.receive is None and resumed.read is None
     assert resumed.received_total == 0
     assert len(resumed.history) == 1
+    assert resumed.minute_bytes("receive") is None
     system.at += 1
     system.network["Ethernet"].bytes_recv = 0
     system.disks["PhysicalDrive0"].read_bytes = 0
@@ -85,6 +90,7 @@ def test_disk_hotplug_and_adapter_selection(system):
     switched = sampler.sample("Wi-Fi")
     assert switched.interface == "Wi-Fi"
     assert switched.receive is None and switched.received_total == 0
+    assert switched.minute_bytes("receive") is None
     del system.network["Wi-Fi"]
     system.at += 1
     offline = sampler.sample("Wi-Fi")

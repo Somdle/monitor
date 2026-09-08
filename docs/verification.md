@@ -205,3 +205,7 @@ yet installed the driver or changed system permissions.
 - 공통 이름/속도/MB/s/차트 배치로 통합하고 네트워크 전용 누적량 표시는 제거. 미사용 quantity 렌더 helper 제거. 센서 수집은 유지.
 - 동일 속도의 두 카드에서 숫자·단위·차트 영역이 일치하는 렌더 테스트 16개 통과. ruff/mypy/diff check 통과. 생성 미리보기 육안 확인.
 - Structure Compliance PASS: 기존 공통 렌더 루프 재사용, 중복 레이아웃 없음, 변경 코드 및 관련 테스트 검토.
+
+## 최근 1분 I/O 사용량
+- 속도 숫자 오른쪽 MB/s, 아래 1m MB. Point에 실측 구간 길이를 추가해 기존 이력을 적분; 최근 60초 경계는 비례 계산. 공백/어댑터 변경 시 기존 이력 초기화 정책 재사용.
+- 테스트 77개, ruff/mypy 통과. 생성 미리보기 육안 확인. Structure Compliance PASS: 센서 이력이 계산 소유, 렌더는 표시만 수행, 중복 누적 상태 없음, 관련 diff 검토.

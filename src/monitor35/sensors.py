@@ -4,6 +4,7 @@ import logging
 import time
 from collections import deque
 from dataclasses import dataclass, replace
+from typing import Literal
 
 import psutil
 
@@ -24,6 +25,7 @@ class Point:
     receive: float | None
     send: float | None
     gpu: float | None = None
+    interval_seconds: float = 0
 
 
 @dataclass(frozen=True)
@@ -45,6 +47,22 @@ class Telemetry:
     interfaces: tuple[str, ...] = ()
     history: tuple[Point, ...] = ()
     warnings: tuple[str, ...] = ()
+
+    def minute_bytes(self, key: Literal["read", "write", "receive", "send"]) -> float | None:
+        """Integrate measured intervals overlapping the last 60 seconds; omit gaps."""
+        total = 0.0
+        measured = False
+        for point in self.history:
+            value = getattr(point, key)
+            duration = max(
+                0.0,
+                min(point.at, self.at)
+                - max(point.at - point.interval_seconds, self.at - HISTORY_SECONDS),
+            )
+            if value is not None and duration > 0:
+                total += value * duration
+                measured = True
+        return total if measured else None
 
 
 class Sampler:
@@ -136,7 +154,17 @@ class Sampler:
             self.history.clear()
         self.previous_at = now
         self.history.append(
-            Point(now, cpu, memory.percent, read, write, receive, send, gpu.percent)
+            Point(
+                now,
+                cpu,
+                memory.percent,
+                read,
+                write,
+                receive,
+                send,
+                gpu.percent,
+                elapsed if valid_interval else 0,
+            )
         )
         while self.history and self.history[0].at < now - HISTORY_SECONDS:
             self.history.popleft()

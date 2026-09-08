@@ -2,6 +2,7 @@
 
 import math
 from functools import lru_cache
+from typing import Literal
 
 from PIL import Image, ImageDraw, ImageFont
 
@@ -139,9 +140,14 @@ def render(theme: Theme, data: Telemetry) -> Image.Image:
                 draw.text((219, 7), "All disks", anchor="ra", font=font(11), fill=MUTED)
             else:
                 fit_text(draw, (90, 7), data.interface or "Disconnected", 129, size=10)
-            keys = ("read", "write") if disk else ("receive", "send")
+            io_keys: tuple[Literal["read", "write", "receive", "send"], ...] = (
+                ("read", "write") if disk else ("receive", "send")
+            )
+            keys = io_keys
             labels = ("R · Read", "W · Write") if disk else ("↓ Receive", "↑ Send")
-            for x, key, label, ink in zip((10, 118), keys, labels, (color, SECONDARY), strict=True):
+            for x, key, label, ink in zip(
+                (10, 118), io_keys, labels, (color, SECONDARY), strict=True
+            ):
                 speed = format_speed(getattr(data, key))
                 number, _, unit = speed.partition(" ")
                 draw.text(
@@ -151,8 +157,18 @@ def render(theme: Theme, data: Telemetry) -> Image.Image:
                     fill=ink,
                     anchor="lt",
                 )
-                draw.text((x, 39), number, font=font(widget.size), fill=ink, anchor="lt")
-                draw.text((x, 67), unit, font=font(11), fill=MUTED, anchor="lt")
+                number_size = widget.size
+                unit_width = draw.textlength(unit, font=font(9))
+                while number_size > 12 and (
+                    draw.textlength(number, font=font(number_size)) + 3 + unit_width > 101
+                ):
+                    number_size -= 1
+                draw.text((x, 62), number, font=font(number_size), fill=ink, anchor="ls")
+                number_width = draw.textlength(number, font=font(number_size))
+                draw.text((x + number_width + 3, 62), unit, font=font(9), fill=MUTED, anchor="ls")
+                volume = data.minute_bytes(key)
+                usage = f"1m {volume / BYTES_PER_MB:.1f} MB" if volume is not None else "1m -- MB"
+                fit_text(draw, (x, 67), usage, 101, size=11)
         chart(
             draw,
             data,
