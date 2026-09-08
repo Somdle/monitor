@@ -16,6 +16,7 @@ from monitor35.power import PowerListener
 from monitor35.render import render
 from monitor35.runtime import MonitorWorker
 from monitor35.sensors import Telemetry
+from monitor35.startup import Startup
 from monitor35.theme import CARD_HEIGHT, CARD_WIDTH, HEIGHT, WIDTH, Theme, load_theme, save_theme
 from monitor35.tray import Tray
 
@@ -45,6 +46,7 @@ class MonitorApp:
         self.instance = instance
         self.last_state = "미리보기"
         self.worker = MonitorWorker(theme)
+        self.startup = Startup(theme_path.parent)
         root.title("Monitor35 · 화면 편집")
         self.window_icons = [
             ImageTk.PhotoImage(app_icon(size), master=root) for size in (16, 32, 48)
@@ -155,6 +157,20 @@ class MonitorApp:
         ttk.Label(shell, textvariable=self.notice, wraplength=880).pack(anchor="w", pady=5)
         self.status = tk.StringVar(value="센서 준비 중…")
         ttk.Label(shell, textvariable=self.status, wraplength=880).pack(anchor="w")
+        self.startup_enabled = tk.BooleanVar(value=False)
+        self.startup_button = ttk.Checkbutton(
+            panel,
+            text="Windows 로그인 시 백그라운드로 시작",
+            variable=self.startup_enabled,
+            command=self.apply_startup,
+        )
+        self.startup_button.pack(anchor="w", pady=(8, 0))
+        try:
+            self.startup_enabled.set(self.startup.enabled())
+        except OSError as exc:
+            logger.exception("startup_registration_read_failed")
+            self.startup_button.configure(state="disabled")
+            self.notice.set(f"시작프로그램 설정을 읽을 수 없습니다: {exc}")
         self.load_fields()
         self.draw()
         root.update_idletasks()
@@ -174,6 +190,23 @@ class MonitorApp:
     def callback_error(self, error_type, value, traceback):
         logger.error("ui_action_failed", exc_info=(error_type, value, traceback))
         self.notice.set(f"작업 실패 · 입력을 확인하고 다시 시도해 주세요: {value}")
+
+    def apply_startup(self):
+        enabled = self.startup_enabled.get()
+        if enabled and self.theme != self.saved_theme and not self.save():
+            self.startup_enabled.set(False)
+            return
+        try:
+            self.startup.set_enabled(enabled)
+            self.notice.set(
+                "시작프로그램 등록 완료 · 다음 로그인부터 백그라운드에서 화면에 연결합니다."
+                if enabled
+                else "시작프로그램 등록을 해제했습니다."
+            )
+        except (OSError, ValueError) as exc:
+            logger.exception("startup_registration_failed")
+            self.startup_enabled.set(not enabled)
+            self.notice.set(f"시작프로그램 변경 실패: {exc}")
 
     def load_fields(self):
         widget = self.theme.widgets[self.selected]

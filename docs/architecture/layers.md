@@ -22,3 +22,5 @@
 - icon: 트레이/편집창 공통 아이콘의 순수 Pillow 렌더링. assets의 PNG/ICO는 app_icon(256)에서 내보낸 배포 자산.
 
 - instance: Windows 세션 내 단일 실행 소유권과 프로세스 간 창 열기 신호. __main__이 수명을 관리하고 app.poll이 신호를 소비한다.
+
+- startup: HKCU Run의 Monitor35 등록 조회/쓰기/삭제와 실행 명령 생성. app은 체크박스와 오류 표시 소유.

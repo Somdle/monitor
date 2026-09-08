@@ -15,3 +15,5 @@ BoundedRevA의 override는 upstream이 timeout을 삼키거나 같은 포트를 
 - tray → icon, app → icon. icon은 프로젝트 모듈에 의존하지 않는다.
 
 - __main__/app → instance. instance는 프로젝트 모듈에 의존하지 않으며 Windows 세션 단일 실행 mutex와 활성화 event만 소유한다.
+
+- app → startup. startup은 프로젝트 모듈에 의존하지 않는다.

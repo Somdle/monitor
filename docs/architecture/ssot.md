@@ -27,3 +27,5 @@ rotate_180은 기본값 false이며 버전 1 테마 이전 시에도 방향을 �
 - 실행 소유권: instance.SingleInstance의 named mutex. 데이터 폴더나 창 제목에 의존하지 않는다. 두 번째 실행은 named event로 기존 창 열기만 요청한다.
 
 - 최근 1분 I/O 사용량: Point.interval_seconds와 Telemetry.minute_bytes. 기존 history에서 유효 구간만 적분하며 렌더는 MB 표시만 담당한다.
+
+- 로그인 자동 실행 등록 여부는 HKCU Run의 Monitor35 값에서 읽는다. 테마에 복제하지 않는다. Windows 자체 시작 허용/차단 상태는 Windows가 소유한다.

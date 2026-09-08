@@ -209,3 +209,7 @@ yet installed the driver or changed system permissions.
 ## 최근 1분 I/O 사용량
 - 속도 숫자 오른쪽 MB/s, 아래 1m MB. Point에 실측 구간 길이를 추가해 기존 이력을 적분; 최근 60초 경계는 비례 계산. 공백/어댑터 변경 시 기존 이력 초기화 정책 재사용.
 - 테스트 77개, ruff/mypy 통과. 생성 미리보기 육안 확인. Structure Compliance PASS: 센서 이력이 계산 소유, 렌더는 표시만 수행, 중복 누적 상태 없음, 관련 diff 검토.
+
+## 시작프로그램 설정
+- 체크박스로 현재 사용자 등록/해제. 생성자/일반 앱 실행은 조회만 수행. 실제 레지스트리는 변경하지 않고 외부 winreg 경계로 등록/해제/권한 실패/실행파일 부재 검증. Windows CommandLineToArgvW로 한글/공백 경로와 절대 data-dir 명령 검증.
+- pytest 80 passed, ruff/mypy 통과. Structure Compliance PASS: startup 소유권 및 app 단방향 의존성, 기존 테마 저장/단일 실행 경로 재사용, 실제 diff 검토, 시스템 자동 변경 없음. 실제 로그인 실행은 아직 검증하지 않음.

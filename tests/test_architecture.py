@@ -10,6 +10,7 @@ def test_imports_follow_documented_ownership():
         "power": set(),
         "icon": set(),
         "instance": set(),
+        "startup": set(),
         "tray": {"icon"},
         "logging_setup": set(),
         "session": set(),
@@ -18,7 +19,17 @@ def test_imports_follow_documented_ownership():
         "sensors": {"gpu", "cpu_temperature"},
         "render": {"theme", "sensors"},
         "runtime": {"device", "render", "session", "theme", "sensors"},
-        "app": {"power", "render", "runtime", "theme", "sensors", "tray", "icon", "instance"},
+        "app": {
+            "power",
+            "render",
+            "runtime",
+            "theme",
+            "sensors",
+            "tray",
+            "icon",
+            "instance",
+            "startup",
+        },
         "__main__": {"device", "logging_setup", "runtime", "theme", "app", "instance"},
     }
     root = Path(__file__).parents[1] / "src" / "monitor35"
