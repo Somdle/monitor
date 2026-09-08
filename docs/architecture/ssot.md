@@ -6,6 +6,9 @@
 - 장치 I/O 계약: session.py의 Display.
 - 센서/프레임 전달: runtime.py의 Snapshot.
 - 센서 값/시간 이력: sensors.py의 Telemetry, Point. Sampler만 변경 가능한 기준값을 소유한다.
+- GPU 센서: gpu.py의 GpuSample과 NvidiaSampler. CPU 온도는 Telemetry.cpu_temperature.
+- CPU 온도 수집은 cpu_temperature.py와 동봉 PowerShell probe가 소유한다. 클럭 수집은 하지 않는다.
+- 공통 차트 위치/크기: render.py의 CHART_BOX. 각 카드 하단에 한 번만 렌더링한다.
 - 카드 크기와 저장 필드: theme.py의 CARD_WIDTH/CARD_HEIGHT와 Theme(version 2).
 - 지원 장치 식별: device.py의 SUPPORTED_IDS.
 
@@ -16,3 +19,9 @@ UI는 Theme를 replace하여 전달한다. worker에 mutable UI 상태를 공유
 runtime이 장치 전송 직전에 전체 프레임을 회전하며 별도의 방향 상태를 만들지 않는다.
 편집기의 포인터와 선택 테두리는 회전 설정과 관계없이 원래 배치 좌표를 사용한다.
 rotate_180은 기본값 false이며 버전 1 테마 이전 시에도 방향을 유지한다.
+
+- 창 표시 여부는 Tk window state, 트레이 준비 여부는 Tray.ready, 전체 종료는 MonitorApp.close가 소유한다. 숨김은 worker/power listener를 종료하지 않는다.
+
+- 앱 아이콘 디자인: icon.app_icon. 트레이와 Tk iconphoto에서 재사용한다.
+
+- 실행 소유권: instance.SingleInstance의 named mutex. 데이터 폴더나 창 제목에 의존하지 않는다. 두 번째 실행은 named event로 기존 창 열기만 요청한다.

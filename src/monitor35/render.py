@@ -14,7 +14,9 @@ GRID = "#3b3b3b"
 TEXT = "#f2f2f2"
 MUTED = "#b9b9b9"
 SECONDARY = "#e5e5e5"
-LABELS = {"cpu": "CPU", "memory": "Memory", "disk": "Disk I/O", "network": "Network"}
+CHART_BOX = (10, 84, 219, 132)
+BYTES_PER_MB = 1_000_000
+LABELS = {"cpu": "CPU / GPU", "memory": "Memory", "disk": "Disk I/O", "network": "Network"}
 
 
 @lru_cache(maxsize=32)
@@ -22,16 +24,12 @@ def font(size: int) -> ImageFont.FreeTypeFont:
     return ImageFont.truetype("malgun.ttf", size)
 
 
-def quantity(value: float | None, rate: bool = False) -> str:
+def format_speed(value: float | None) -> str:
     if value is None:
-        return "--"
-    units = ("B", "KiB", "MiB", "GiB", "TiB")
-    index = 0
-    while value >= 1024 and index < len(units) - 1:
-        value /= 1024
-        index += 1
-    number = f"{value:.1f}" if index and value < 100 else f"{value:.0f}"
-    return f"{number} {units[index]}" + ("/s" if rate else "")
+        return "-- MB/s"
+    amount = value / BYTES_PER_MB
+    precision = 2 if amount < 100 else 1 if amount < 1000 else 0
+    return f"{amount:.{precision}f} MB/s"
 
 
 def fit_text(
@@ -67,7 +65,8 @@ def chart(
         )
     )
     if not percent:
-        maximum = 2 ** math.ceil(math.log2(maximum))
+        divisor = BYTES_PER_MB
+        maximum = divisor * 2 ** math.ceil(math.log2(max(1, maximum / divisor)))
     draw.rectangle(box, outline=GRID)
     for step in range(1, 4):
         x = x0 + (x1 - x0) * step // 4
@@ -88,7 +87,7 @@ def chart(
                 draw.point((x, y), fill=color if index == 0 else SECONDARY)
             previous = (x, y)
     draw.text((x0, y1 + 1), "60 s", font=font(9), fill=MUTED)
-    scale = "100%" if percent else quantity(maximum, rate=True)
+    scale = "100%" if percent else format_speed(maximum)
     draw.text((x1, y1 + 1), scale, anchor="ra", font=font(9), fill=MUTED)
 
 
@@ -102,30 +101,38 @@ def render(theme: Theme, data: Telemetry) -> Image.Image:
         draw.line((0, 0, 0, CARD_HEIGHT - 1), fill=color, width=2)
         draw.text((10, 4), LABELS[widget.metric], fill=TEXT, font=font(14))
         metric = widget.metric
-        if metric in ("cpu", "memory"):
-            value = data.cpu if metric == "cpu" else data.memory_percent
-            draw.text(
-                (CARD_WIDTH - 10, 0),
-                f"{value:.0f}%" if value is not None else "--",
-                fill=TEXT,
-                font=font(widget.size),
-                anchor="ra",
-            )
-            chart(draw, data, (metric,), (10, 33, 219, 106), color, percent=True)
-            if metric == "memory":
-                divisor = 1024**3 if data.memory_total < 1024**4 else 1024**4
-                unit = "GiB" if divisor == 1024**3 else "TiB"
-                precision = 1 if data.memory_total / divisor < 100 else 0
-                amount = (
-                    (
-                        f"{data.memory_used / divisor:.{precision}f}/"
-                        f"{data.memory_total / divisor:.{precision}f}"
-                    )
-                    if value is not None
-                    else "--"
+        keys: tuple[str, ...]
+        if metric == "cpu":
+            keys = ("cpu", "gpu")
+            for x, label, value, temperature, ink in (
+                (10, "CPU", data.cpu, data.cpu_temperature, color),
+                (118, "GPU", data.gpu.percent, data.gpu.temperature, SECONDARY),
+            ):
+                draw.text((x, 24), label, font=font(11), fill=ink, anchor="lt")
+                draw.text(
+                    (x, 39),
+                    f"{value:.0f}%" if value is not None else "--",
+                    font=font(widget.size),
+                    fill=ink,
+                    anchor="lt",
                 )
-                draw.text((10, 122), amount, font=font(widget.size), fill=TEXT, anchor="lt")
-                draw.text((219, 136), unit, anchor="ra", font=font(11), fill=MUTED)
+                detail = f"{temperature:.0f}°C" if temperature is not None else "--°C"
+                draw.text((x, 62), detail, font=font(22), fill=ink, anchor="lt")
+        elif metric == "memory":
+            keys = ("memory",)
+            percent = f"{data.memory_percent:.0f}%" if data.memory_percent is not None else "--"
+            draw.text((10, 24), "Utilization", font=font(11), fill=color, anchor="lt")
+            draw.text((10, 39), percent, font=font(widget.size), fill=color, anchor="lt")
+            divisor = 1024**3 if data.memory_total < 1024**4 else 1024**4
+            unit = "GiB" if divisor == 1024**3 else "TiB"
+            precision = 1 if data.memory_total / divisor < 100 else 0
+            capacity = (
+                f"{data.memory_used / divisor:.{precision}f} / "
+                f"{data.memory_total / divisor:.{precision}f} {unit} in use"
+                if data.memory_percent is not None
+                else "Capacity --"
+            )
+            fit_text(draw, (10, 65), capacity, 209, size=11)
         else:
             disk = metric == "disk"
             if disk:
@@ -135,18 +142,24 @@ def render(theme: Theme, data: Telemetry) -> Image.Image:
             keys = ("read", "write") if disk else ("receive", "send")
             labels = ("R · Read", "W · Write") if disk else ("↓ Receive", "↑ Send")
             for x, key, label, ink in zip((10, 118), keys, labels, (color, SECONDARY), strict=True):
-                draw.text((x, 24), label, font=font(11), fill=ink, anchor="lt")
-                number, _, unit = quantity(getattr(data, key), rate=True).partition(" ")
+                speed = format_speed(getattr(data, key))
+                number, _, unit = speed.partition(" ")
+                draw.text(
+                    (x, 24),
+                    label,
+                    font=font(11),
+                    fill=ink,
+                    anchor="lt",
+                )
                 draw.text((x, 39), number, font=font(widget.size), fill=ink, anchor="lt")
                 draw.text((x, 67), unit, font=font(11), fill=MUTED, anchor="lt")
-            chart(draw, data, keys, (10, 84, 219, 132 if disk else 99), color)
-            if not disk:
-                for x, value, ink in (
-                    (10, data.received_total, color),
-                    (118, data.sent_total, SECONDARY),
-                ):
-                    number, _, unit = quantity(value).partition(" ")
-                    draw.text((x, 114), number, font=font(widget.size), fill=ink, anchor="lt")
-                    draw.text((x, 139), unit + " total", font=font(10), fill=MUTED, anchor="lt")
+        chart(
+            draw,
+            data,
+            keys,
+            CHART_BOX,
+            color,
+            percent=metric in ("cpu", "memory"),
+        )
         image.paste(card, (widget.x, widget.y))
     return image

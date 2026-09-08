@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "Local Turing 3.5 screen monitor with recoverable transport and visual layout editing"
 requires-python = ">=3.12"
 license = "GPL-3.0-or-later"
-dependencies = ["smartscreen-driver==0.2.3", "psutil==7.2.2", "Pillow==12.3.0", "numpy==2.5.2", "pyserial==3.5"]
+dependencies = ["smartscreen-driver==0.2.3", "psutil==7.2.2", "Pillow==12.3.0", "numpy==2.5.2", "pyserial==3.5", "pystray==0.19.5"]
 
 [project.optional-dependencies]
 dev = ["pytest==9.1.1", "ruff==0.16.6", "mypy==2.3.1", "build==1.6.0", "types-psutil", "types-pyserial"]
@@ -18,6 +18,9 @@ monitor35 = "monitor35.__main__:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+monitor35 = ["*.ps1", "assets/*.ico", "assets/*.png"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -38,5 +41,5 @@ check_untyped_defs = true
 cache_dir = ".tmp/mypy-cache"
 
 [[tool.mypy.overrides]]
-module = ["smartscreen_driver.*"]
+module = ["smartscreen_driver.*", "pystray.*"]
 ignore_missing_imports = true

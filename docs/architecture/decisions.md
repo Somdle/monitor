@@ -66,3 +66,43 @@ Alternative: 긴 값 전체를 한 줄로 확대하면 카드 밖으로 넘쳐 �
 Cost: 보조 단위와 차트 눈금은 작은 크기를 유지한다. 100 이상 변환값은 소수점을 생략한다.
 Migration: 저장 형식과 기본 숫자 크기는 그대로이며 모든 카드에서 숫자 크기 편집을 제공한다.
 구형 용량 수집 호환 경로나 새 상태는 없다. 기존 센서/렌더러/편집기 소유권과 회전은 유지한다.
+
+## 2026-09-07 — Uniform bottom charts and GPU telemetry
+
+Why: 사용자가 모든 차트를 기존 디스크 크기로 맞추고 정보를 위로 배치하도록 요청했다.
+CPU/GPU 교대 대신 같은 카드에 두 사용률을 함께 표시하는 선택을 확인했다.
+Decision: CHART_BOX=(10,84,219,132)를 renderer가 소유하고 모든 카드가 한 공통 호출로
+하단 차트를 그린다. CPU/GPU는 큰 사용률 숫자와 두 곡선을 표시한다. GPU 온도/그래픽 클럭,
+CPU 기준 클럭과 네트워크 누적량은 상단 보조 행에 둔다. 테마 형식과 회전 계약은 그대로다.
+Sensor boundary: gpu.py가 nvidia-smi의 명시적 CSV 필드 조회와 GpuSample을 소유한다.
+명령은 읽기 전용, shell 없이 숨김 실행, 0.7초 제한이며 실패 즉시 오래된 값을 폐기하고
+15초 후 재시도한다. UI/USB thread 소유권은 변하지 않는다. GPU 조회에는 새 의존성이 없다.
+Alternatives: NVIDIA는 호환성 면에서 NVML 바인딩을 권장한다. 여기서는 GPU 드라이버 호출을
+별도 프로세스에서 시간 제한할 수 있는 CLI를 사용한다. 출력 형식을 엄격히 검사하고 실패를
+unavailable로 전파하므로 드라이버 변경 시 잘못된 수치를 표시하지 않는다.
+Cost: 프로세스 조회 비용이 추가된다. NVIDIA GPU 0만 지원하며 AMD 내장 GPU/CPU 온도는
+현재 지원하지 않는다. CPU max frequency는 기준 클럭으로 표기하고 현재 부스트 값으로 주장하지 않는다.
+Evidence: RTX 4070 SUPER 사용률/온도/현재 그래픽 클럭을 실제 조회했다.
+Source: https://docs.nvidia.com/deploy/nvidia-smi/index.html
+Pre-write: main/origin/main 동기화, 설명 가능한 진행 중 변경만 존재했다. 기존 sensors/render
+소유권과 import 검사에서 GPU 경계를 추가했고, 원본 앱·드라이버·전원 설정은 수정하지 않았다.
+
+## 2026-09-07 — CPU/GPU temperatures instead of clocks
+
+Decision: CPU/GPU 클럭 표시와 전용 클럭 조회를 제거하고 온도를 22px로 표시한다.
+CPU는 별도 PowerShell 프로세스의 LibreHardwareMonitor CPU package/Tctl/Tdie 센서를 사용한다.
+기존 Windows 센서는 Ryzen 7 9700X 온도를 제공하지 않았으며 ACPI/메인보드 값을 대체하지 않는다.
+온도 프로세스는 직렬 I/O worker를 막지 않고 최신 값만 전달한다. 5초 공백/프로세스 종료/범위 오류는
+unavailable로 처리한다. worker 종료 시 센서 프로세스를 종료한다. 센서 라이브러리는 공식
+0.9.6 zip의 SHA-256 검증 후 .venv/hardware에 준비하며 기본 의존성에 자동 설치하지 않는다.
+Alternative: 제거된 구버전 LHM WMI API나 메인 앱 내부 .NET 로딩 대신 격리 프로세스를 사용한다.
+Cost: PawnIO 드라이버와 관리자 권한이 필요할 수 있다. 시스템 변경은 사용자 사전 승인 대상이다.
+공식 배포본 내 PawnIO 설치 파일의 Authenticode 서명은 Valid(namazso)로 확인했다.
+드라이버 설치 전에는 CPU 온도 실측을 완료했다고 주장하지 않는다.
+
+## 트레이 상주
+pystray 0.19.5의 Windows 이벤트 루프를 별도 스레드에서 실행한다. Tk 조작은 기존 poll 루프만 수행한다. 창 X는 저장 후 숨김, 명시적 완전 종료는 기존 worker 종료 경로를 재사용한다. 숨김 중에는 편집기 재렌더링만 생략한다. 로그인 자동 실행 및 시스템 설정은 변경하지 않는다.
+
+## 단일 실행과 기존 창 활성화
+창 제목 검색은 시작 중/트레이 숨김을 놓치므로 Windows named mutex로 GUI 초기화 전에 소유권을 획득한다. 먼저 생성한 auto-reset event가 시작 중 열기 요청도 보관한다. 파일 잠금/네트워크 서버 없이 기존 Tk poll에서 창을 복원한다. 같은 Windows 세션에서 data-dir와 관계없이 한 인스턴스만 허용한다. 진단 --devices와 무장치 --smoke는 제외하며 --connect 스모크는 잠금을 준수한다. 이전 버전에는 이 프로토콜이 없으므로 업데이트 후 기존 앱을 한 번 완전히 종료해야 한다.
+근거: https://learn.microsoft.com/en-us/windows/win32/api/synchapi/nf-synchapi-createmutexw 및 https://learn.microsoft.com/en-us/windows/win32/api/synchapi/nf-synchapi-createeventw

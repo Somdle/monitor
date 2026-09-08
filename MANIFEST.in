@@ -1,2 +1,2 @@
-include AGENTS.md README.md THIRD_PARTY_NOTICES.md start.cmd setup.cmd
+include AGENTS.md README.md THIRD_PARTY_NOTICES.md start.cmd setup.cmd setup-temperature.ps1
 recursive-include docs *.md

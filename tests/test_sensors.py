@@ -1,3 +1,4 @@
+import subprocess
 from types import SimpleNamespace as NS
 
 import pytest
@@ -7,6 +8,12 @@ from monitor35.sensors import Sampler
 
 @pytest.fixture
 def system(monkeypatch):
+    def missing_driver(*args):
+        raise FileNotFoundError("PawnIO unavailable in test")
+
+    monkeypatch.setattr("winreg.OpenKey", missing_driver)
+    monkeypatch.setattr("shutil.which", lambda _: "nvidia-smi.exe")
+    monkeypatch.setattr("subprocess.run", lambda *args, **kwargs: NS(stdout="RTX, 60, 62"))
     state = NS(
         at=100.0,
         disks={"PhysicalDrive0": NS(read_bytes=1000, write_bytes=2000)},
@@ -31,6 +38,7 @@ def test_memory_capacity_and_elapsed_rates(system):
     sampler = Sampler()
     first = sampler.sample()
     assert (first.memory_used, first.memory_total) == (20 * 1024**3, 32 * 1024**3)
+    assert first.gpu.percent == first.history[-1].gpu == 60
     assert first.receive is None and first.read is None
     system.at += 2
     system.disks["PhysicalDrive1"].read_bytes += 4096
@@ -102,3 +110,17 @@ def test_unavailable_disk_counters_leave_other_sensors_running(system, monkeypat
     assert sample.read is None and sample.write is None
     assert sample.cpu == 42
     assert sample.warnings
+
+
+def test_gpu_timeout_does_not_stop_other_sampling(system, monkeypatch):
+    def timeout(*args, **kwargs):
+        raise subprocess.TimeoutExpired(args[0], 0.7)
+
+    monkeypatch.setattr("subprocess.run", timeout)
+    sampler = Sampler()
+    sampler.sample()
+    system.at += 1
+    sample = sampler.sample()
+    assert sample.gpu.percent is None and sample.warnings
+    assert sample.cpu == 42 and sample.memory_used == 20 * 1024**3
+    assert sample.read == sample.write == sample.receive == sample.send == 0

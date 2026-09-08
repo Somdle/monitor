@@ -8,13 +8,18 @@ def test_imports_follow_documented_ownership():
         "theme": set(),
         "device": set(),
         "power": set(),
+        "icon": set(),
+        "instance": set(),
+        "tray": {"icon"},
         "logging_setup": set(),
         "session": set(),
-        "sensors": set(),
+        "gpu": set(),
+        "cpu_temperature": set(),
+        "sensors": {"gpu", "cpu_temperature"},
         "render": {"theme", "sensors"},
         "runtime": {"device", "render", "session", "theme", "sensors"},
-        "app": {"power", "render", "runtime", "theme", "sensors"},
-        "__main__": {"device", "logging_setup", "runtime", "theme", "app"},
+        "app": {"power", "render", "runtime", "theme", "sensors", "tray", "icon", "instance"},
+        "__main__": {"device", "logging_setup", "runtime", "theme", "app", "instance"},
     }
     root = Path(__file__).parents[1] / "src" / "monitor35"
     for path in root.glob("*.py"):

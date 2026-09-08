@@ -10,18 +10,29 @@ from tkinter import colorchooser, ttk
 
 from PIL import ImageTk
 
+from monitor35.icon import app_icon
+from monitor35.instance import SingleInstance
 from monitor35.power import PowerListener
 from monitor35.render import render
 from monitor35.runtime import MonitorWorker
 from monitor35.sensors import Telemetry
 from monitor35.theme import CARD_HEIGHT, CARD_WIDTH, HEIGHT, WIDTH, Theme, load_theme, save_theme
+from monitor35.tray import Tray
 
 logger = logging.getLogger(__name__)
-NAMES = {"cpu": "CPU", "memory": "메모리", "disk": "디스크", "network": "네트워크"}
+NAMES = {"cpu": "CPU / GPU", "memory": "메모리", "disk": "디스크", "network": "네트워크"}
 
 
 class MonitorApp:
-    def __init__(self, root: tk.Tk, theme: Theme, theme_path: Path, connect: bool = False):
+    def __init__(
+        self,
+        root: tk.Tk,
+        theme: Theme,
+        theme_path: Path,
+        connect: bool = False,
+        background: bool = False,
+        instance: SingleInstance | None = None,
+    ):
         self.root, self.theme, self.theme_path = root, theme, theme_path
         self.saved_theme = theme
         self.history: list[Theme] = []
@@ -30,9 +41,15 @@ class MonitorApp:
         self.drag_origin: tuple[int, int] | None = None
         self.drag_theme = theme
         self.closing = False
+        self.background_pending = background
+        self.instance = instance
         self.last_state = "미리보기"
         self.worker = MonitorWorker(theme)
         root.title("Monitor35 · 화면 편집")
+        self.window_icons = [
+            ImageTk.PhotoImage(app_icon(size), master=root) for size in (16, 32, 48)
+        ]
+        root.iconphoto(False, *(str(icon) for icon in self.window_icons))
         root.geometry("980x820")
         root.minsize(900, 800)
         root.configure(bg="#eef2f6")
@@ -74,7 +91,9 @@ class MonitorApp:
             preview,
             text="연결 후 편집 내용이 실제 화면에도 반영됩니다.\n"
             "차트: 최근 60초 · 디스크: 전체 읽기/쓰기 합계\n"
-            "네트워크 누적: 앱/어댑터 시작 이후 측정분 (절전 제외)",
+            "디스크·네트워크: 속도 MB/s · 같은 배치\n"
+            "CPU·GPU 온도는 큰 글자로 표시합니다.\n"
+            "CPU 온도는 PawnIO와 관리자 권한이 필요할 수 있습니다.",
         ).pack(anchor="w", pady=12)
         panel = ttk.Frame(content, padding=(24, 0, 0, 0))
         panel.pack(side="left", fill="both", expand=True)
@@ -129,6 +148,8 @@ class MonitorApp:
         )
         self.undo_button.pack(side="left", padx=8)
         ttk.Button(actions, text="저장본 불러오기", command=self.reload).pack(side="left")
+        ttk.Button(actions, text="완전히 종료", command=self.close).pack(side="right")
+        ttk.Button(actions, text="백그라운드로", command=self.hide).pack(side="right", padx=8)
         self.notice = tk.StringVar(value="미리보기 준비 완료. 기존 UsbMonitor 종료 후 연결하세요.")
         ttk.Label(shell, textvariable=self.notice, wraplength=880).pack(anchor="w", pady=5)
         self.status = tk.StringVar(value="센서 준비 중…")
@@ -140,7 +161,8 @@ class MonitorApp:
         self.power = PowerListener(
             root.winfo_id(), self.worker.request_suspend, self.worker.request_resume
         )
-        root.protocol("WM_DELETE_WINDOW", self.close)
+        self.tray = Tray()
+        root.protocol("WM_DELETE_WINDOW", self.hide)
         root.bind("<Control-s>", lambda _: self.save())
         root.bind("<Control-z>", lambda _: self.undo())
         if connect:
@@ -304,6 +326,27 @@ class MonitorApp:
     def poll(self):
         if self.closing:
             return
+        if self.instance is not None and self.instance.activation_requested():
+            self.background_pending = False
+            self.show()
+        while not self.tray.commands.empty():
+            command = self.tray.commands.get_nowait()
+            if command == "quit":
+                self.close()
+                if self.closing:
+                    return
+            elif command == "show":
+                self.background_pending = False
+                self.show()
+            elif command == "failed":
+                self.background_pending = False
+                self.show()
+                self.notice.set(
+                    "트레이를 사용할 수 없어 편집창을 유지합니다. 로그를 확인해 주세요."
+                )
+        if self.background_pending and self.tray.ready.is_set():
+            self.background_pending = False
+            self.hide()
         try:
             snapshot = self.worker.snapshots.get_nowait()
         except queue.Empty:
@@ -327,7 +370,7 @@ class MonitorApp:
                 elif status.state == "미리보기":
                     self.notice.set("연결 해제 완료 · 미리보기 편집을 계속할 수 있습니다.")
                 self.last_state = status.state
-            if status.state != "오류":
+            if status.state != "오류" and self.root.state() == "normal":
                 self.draw()
             sent = (
                 datetime.fromtimestamp(status.last_sent).strftime("%H:%M:%S")
@@ -340,15 +383,36 @@ class MonitorApp:
                 + " ".join(self.values.warnings)
             )
             if status.state == "오류":
+                self.show()
                 self.connect_button.configure(state="disabled")
                 self.reconnect_button.configure(state="disabled")
                 self.notice.set("작업이 중지됐습니다. 로그를 확인하고 앱을 다시 실행해 주세요.")
         self.root.after(100, self.poll)
 
-    def close(self):
+    def show(self):
+        self.root.deiconify()
+        self.root.lift()
+        self.draw()
+
+    def hide(self):
+        if self.closing:
+            return
+        if not self.tray.ready.is_set():
+            self.notice.set("트레이 준비 중이거나 사용할 수 없습니다. 편집창을 유지합니다.")
+            return
         if self.theme != self.saved_theme and not self.save():
             return
+        self.notice.set("백그라운드 실행 중 · 트레이 아이콘에서 편집기를 다시 열 수 있습니다.")
+        self.root.withdraw()
+
+    def close(self):
+        if self.closing:
+            return
+        if self.theme != self.saved_theme and not self.save():
+            self.show()
+            return
         self.closing = True
+        self.tray.close()
         self.worker.request_stop()
         self.notice.set("화면 전송을 마치고 종료 중…")
         self.connect_button.configure(state="disabled")
@@ -356,7 +420,7 @@ class MonitorApp:
         self.finish_close()
 
     def finish_close(self):
-        if self.worker.is_alive():
+        if self.worker.is_alive() or self.tray.is_alive():
             self.root.after(100, self.finish_close)
         else:
             self.power.close()

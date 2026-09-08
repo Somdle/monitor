@@ -7,6 +7,9 @@ from dataclasses import dataclass, replace
 
 import psutil
 
+from monitor35.cpu_temperature import CpuTemperature
+from monitor35.gpu import GpuSample, NvidiaSampler
+
 logger = logging.getLogger(__name__)
 HISTORY_SECONDS = 60
 
@@ -20,6 +23,7 @@ class Point:
     write: float | None
     receive: float | None
     send: float | None
+    gpu: float | None = None
 
 
 @dataclass(frozen=True)
@@ -29,6 +33,8 @@ class Telemetry:
     memory_percent: float | None = None
     memory_used: int = 0
     memory_total: int = 0
+    cpu_temperature: float | None = None
+    gpu: GpuSample = GpuSample()
     read: float | None = None
     write: float | None = None
     receive: float | None = None
@@ -50,7 +56,9 @@ class Sampler:
         self.received_total = self.sent_total = 0
         self.history: deque[Point] = deque(maxlen=120)
         self.previous_warnings: tuple[str, ...] = ()
+        self.gpu = NvidiaSampler()
         psutil.cpu_percent()
+        self.cpu_temperature = CpuTemperature()
 
     def sample(self, requested_interface: str = "") -> Telemetry:
         now = time.monotonic()
@@ -59,6 +67,12 @@ class Sampler:
         cpu = psutil.cpu_percent()
         memory = psutil.virtual_memory()
         warnings = []
+        gpu = self.gpu.sample(now)
+        if gpu.warning:
+            warnings.append(gpu.warning)
+        cpu_temperature, cpu_warning = self.cpu_temperature.sample()
+        if cpu_warning:
+            warnings.append(cpu_warning)
         try:
             disks = psutil.disk_io_counters(perdisk=True, nowrap=False) or {}
         except OSError:
@@ -121,7 +135,9 @@ class Sampler:
         if elapsed > 5 or elapsed < 0:
             self.history.clear()
         self.previous_at = now
-        self.history.append(Point(now, cpu, memory.percent, read, write, receive, send))
+        self.history.append(
+            Point(now, cpu, memory.percent, read, write, receive, send, gpu.percent)
+        )
         while self.history and self.history[0].at < now - HISTORY_SECONDS:
             self.history.popleft()
         warning_tuple = tuple(warnings)
@@ -134,6 +150,8 @@ class Sampler:
             memory_percent=memory.percent,
             memory_used=memory.total - memory.available,
             memory_total=memory.total,
+            cpu_temperature=cpu_temperature,
+            gpu=gpu,
             read=read,
             write=write,
             receive=receive,
@@ -145,3 +163,6 @@ class Sampler:
             history=tuple(self.history),
             warnings=warning_tuple,
         )
+
+    def close(self):
+        self.cpu_temperature.close()

@@ -81,6 +81,7 @@ class MonitorWorker(threading.Thread):
         self.snapshots.put_nowait(snapshot)
 
     def run(self) -> None:
+        sampler: Sampler | None = None
         values = Telemetry()
         frame = Image.new("RGB", (WIDTH, HEIGHT))
         try:
@@ -137,3 +138,5 @@ class MonitorWorker(threading.Thread):
             )
         finally:
             self.session.disconnect()
+            if sampler is not None:
+                sampler.close()
