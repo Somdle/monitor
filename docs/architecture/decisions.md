@@ -107,6 +107,17 @@ pystray 0.19.5의 Windows 이벤트 루프를 별도 스레드에서 실행한�
 창 제목 검색은 시작 중/트레이 숨김을 놓치므로 Windows named mutex로 GUI 초기화 전에 소유권을 획득한다. 먼저 생성한 auto-reset event가 시작 중 열기 요청도 보관한다. 파일 잠금/네트워크 서버 없이 기존 Tk poll에서 창을 복원한다. 같은 Windows 세션에서 data-dir와 관계없이 한 인스턴스만 허용한다. 진단 --devices와 무장치 --smoke는 제외하며 --connect 스모크는 잠금을 준수한다. 이전 버전에는 이 프로토콜이 없으므로 업데이트 후 기존 앱을 한 번 완전히 종료해야 한다.
 근거: https://learn.microsoft.com/en-us/windows/win32/api/synchapi/nf-synchapi-createmutexw 및 https://learn.microsoft.com/en-us/windows/win32/api/synchapi/nf-synchapi-createeventw
 
+## 2026-09-12 — 네트워크 전체 합산
+
+사용자 요청에 따라 기존 자동 선택(빈 network_interface)을 활성 어댑터 전체 합산으로 변경한다.
+Sampler가 어댑터별 증분을 합산해 수신·송신 속도, 누적량, 60초 이력을 동일하게 공급한다.
+디스크는 기존 전체 물리 디스크 합산을 유지하며 양쪽 디스크의 읽기·쓰기 기여분을 테스트한다.
+하나만 자동 선택하는 기존 방식은 동시 유선·무선 트래픽을 누락하므로 채택하지 않는다.
+테마 형식과 특정 어댑터 지정 기능은 유지하며, 기존 지정 사용자는 전체 합산을 선택해 저장한다.
+활성 VPN·가상 어댑터도 포함되는 비용이 있으며 필요 시 특정 어댑터 지정으로 측정 범위를 제한한다.
+목록 변경 구간은 속도를 표시하지 않고 기준값을 갱신해 핫플러그 누적 카운터로 인한 급증을 방지한다.
+변경은 코드 되돌리기로 복구 가능하며 별도 호환 레이어·의존성·USB I/O 변경은 없다.
+
 ## 선택적 로그인 자동 실행
 사용자 체크 액션에서만 HKCU Run의 Monitor35 값을 등록/해제한다. 관리자 권한이나 작업 스케줄러 없이 로그인 시 pythonw를 실행하며 절대 data-dir 및 --background --connect를 전달한다. 콘솔창과 작업 디렉터리 의존을 피한다. 기존 단일 실행 정책을 재사용한다. 앞선 자동 실행 제외 범위를 이 기능으로 확장하되 기존 UsbMonitor 설정은 변경하지 않는다.
 근거: https://learn.microsoft.com/en-us/windows/win32/setupapi/run-and-runonce-registry-keys

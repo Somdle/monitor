@@ -95,7 +95,7 @@ def chart(
 def render(theme: Theme, data: Telemetry) -> Image.Image:
     image = Image.new("RGB", (WIDTH, HEIGHT), BACKGROUND)
     for widget in theme.widgets:
-        # Rendering into a card clips custom font sizes and long adapter names.
+        # Rendering into a card clips custom font sizes.
         card = Image.new("RGB", (CARD_WIDTH, CARD_HEIGHT), CARD)
         draw = ImageDraw.Draw(card)
         color = widget.color
@@ -136,10 +136,6 @@ def render(theme: Theme, data: Telemetry) -> Image.Image:
             fit_text(draw, (10, 65), capacity, 209, size=11)
         else:
             disk = metric == "disk"
-            if disk:
-                draw.text((219, 7), "All disks", anchor="ra", font=font(11), fill=MUTED)
-            else:
-                fit_text(draw, (90, 7), data.interface or "Disconnected", 129, size=10)
             io_keys: tuple[Literal["read", "write", "receive", "send"], ...] = (
                 ("read", "write") if disk else ("receive", "send")
             )

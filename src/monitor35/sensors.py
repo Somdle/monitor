@@ -69,8 +69,8 @@ class Sampler:
     def __init__(self):
         self.previous_at: float | None = None
         self.disk_previous: dict[str, tuple[int, int]] = {}
-        self.net_previous: tuple[int, int] | None = None
-        self.interface = ""
+        self.net_previous: dict[str, tuple[int, int]] = {}
+        self.requested_interface = ""
         self.received_total = self.sent_total = 0
         self.history: deque[Point] = deque(maxlen=120)
         self.previous_warnings: tuple[str, ...] = ()
@@ -117,38 +117,37 @@ class Sampler:
             for name, value in interfaces.items()
             if name in stats and stats[name].isup and "loopback" not in name.lower()
         }
-        selected = requested_interface
-        if not selected:
-            if self.interface in active:
-                selected = self.interface
-            elif active:
-                selected = max(
-                    active, key=lambda name: active[name].bytes_recv + active[name].bytes_sent
-                )
-        changed = selected != self.interface
-        if changed:
-            self.net_previous = None
+        if requested_interface != self.requested_interface:
+            self.net_previous = {}
             self.received_total = self.sent_total = 0
             self.history = deque(
                 (replace(point, receive=None, send=None) for point in self.history), maxlen=120
             )
-        self.interface = selected
+        self.requested_interface = requested_interface
+        net_current = {
+            name: (value.bytes_recv, value.bytes_sent)
+            for name, value in active.items()
+            if not requested_interface or name == requested_interface
+        }
         receive = send = None
-        counter = active.get(selected)
-        if counter is not None:
-            current = (counter.bytes_recv, counter.bytes_sent)
-            if valid_interval and self.net_previous is not None:
-                rx, tx = current[0] - self.net_previous[0], current[1] - self.net_previous[1]
-                if rx >= 0 and tx >= 0:
-                    receive, send = rx / elapsed, tx / elapsed
-                    self.received_total += rx
-                    self.sent_total += tx
-            self.net_previous = current
-        else:
-            self.net_previous = None
+        if net_current and valid_interval and net_current.keys() == self.net_previous.keys():
+            deltas = [
+                (value[0] - self.net_previous[name][0], value[1] - self.net_previous[name][1])
+                for name, value in net_current.items()
+            ]
+            if all(rx >= 0 and tx >= 0 for rx, tx in deltas):
+                received = sum(rx for rx, _ in deltas)
+                sent = sum(tx for _, tx in deltas)
+                receive, send = received / elapsed, sent / elapsed
+                self.received_total += received
+                self.sent_total += sent
+        if not net_current:
             warnings.append(
-                "선택한 네트워크 연결이 끊겼습니다." if selected else "활성 네트워크가 없습니다."
+                "선택한 네트워크 연결이 끊겼습니다."
+                if requested_interface
+                else "활성 네트워크가 없습니다."
             )
+        self.net_previous = net_current
         # A resume/stalled sampling interval must not invent rates or bridge the graph.
         if elapsed > 5 or elapsed < 0:
             self.history.clear()
@@ -186,7 +185,7 @@ class Sampler:
             send=send,
             received_total=self.received_total,
             sent_total=self.sent_total,
-            interface=selected,
+            interface=requested_interface or " + ".join(sorted(net_current)),
             interfaces=tuple(sorted(active)),
             history=tuple(self.history),
             warnings=warning_tuple,

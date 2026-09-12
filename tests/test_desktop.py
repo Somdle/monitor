@@ -186,6 +186,13 @@ def test_edit_invalid_input_undo_save_and_shutdown(tmp_path, desktop_root):
         app.network.set("Ethernet")
         app.apply_network()
         assert app.theme.network_interface == "Ethernet"
+        app.network.current(0)
+        app.apply_network()
+        assert app.theme.network_interface == ""
+        assert app.save()
+        assert load_theme(tmp_path / "theme.json").network_interface == ""
+        app.undo()
+        assert app.theme.network_interface == "Ethernet"
         app.undo()
         assert app.theme.network_interface == ""
         app.selection.current(2)

@@ -27,5 +27,8 @@ rotate_180은 기본값 false이며 버전 1 테마 이전 시에도 방향을 �
 - 실행 소유권: instance.SingleInstance의 named mutex. 데이터 폴더나 창 제목에 의존하지 않는다. 두 번째 실행은 named event로 기존 창 열기만 요청한다.
 
 - 최근 1분 I/O 사용량: Point.interval_seconds와 Telemetry.minute_bytes. 기존 history에서 유효 구간만 적분하며 렌더는 MB 표시만 담당한다.
+- 디스크 및 네트워크 합산: Sampler가 장치별 카운터 차이를 합산해 속도와 Point를 만든다.
+  빈 network_interface는 루프백을 제외한 활성 어댑터 전체 합산, 지정 이름은 단일 어댑터다.
+  어댑터 목록 변경은 기준값만 갱신하고, 사용자가 측정 대상을 바꾸면 네트워크 누적량·이력을 초기화한다.
 
 - 로그인 자동 실행 등록 여부는 HKCU Run의 Monitor35 값에서 읽는다. 테마에 복제하지 않는다. Windows 자체 시작 허용/차단 상태는 Windows가 소유한다.

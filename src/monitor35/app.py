@@ -217,8 +217,8 @@ class MonitorApp:
         self.rotation.set(self.theme.rotate_180)
         self.selection.configure(values=[NAMES[w.metric] for w in self.theme.widgets])
         interfaces = tuple(dict.fromkeys((self.theme.network_interface,) + self.values.interfaces))
-        self.network.configure(values=["자동 선택"] + [name for name in interfaces if name])
-        self.network.set(self.theme.network_interface or "자동 선택")
+        self.network.configure(values=["전체 합산"] + [name for name in interfaces if name])
+        self.network.set(self.theme.network_interface or "전체 합산")
 
     def draw(self):
         self.photo = ImageTk.PhotoImage(render(self.theme, self.values))
@@ -313,7 +313,7 @@ class MonitorApp:
 
     def apply_network(self, _event=None):
         name = self.network.get()
-        self.changed(replace(self.theme, network_interface="" if name == "자동 선택" else name))
+        self.changed(replace(self.theme, network_interface="" if name == "전체 합산" else name))
 
     def save(self) -> bool:
         try:
@@ -392,7 +392,7 @@ class MonitorApp:
                 interfaces = tuple(
                     dict.fromkeys((self.theme.network_interface,) + self.values.interfaces)
                 )
-                self.network.configure(values=["자동 선택"] + [name for name in interfaces if name])
+                self.network.configure(values=["전체 합산"] + [name for name in interfaces if name])
             status = snapshot.status
             if status.state != self.last_state:
                 if status.state == "전송 중":
